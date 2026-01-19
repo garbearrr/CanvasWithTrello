@@ -11,7 +11,7 @@ from .canvas import CanvasClient
 from .config import Config, load_env
 from .logging_utils import instrument_session
 from .state import SyncState
-from .syncer import sync_once
+from .syncer import dedupe_board, ensure_state_board, sync_once
 from .trello import TrelloClient
 
 
@@ -37,12 +37,27 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument(
         "--wipe-board-confirm",
         default="",
-        help="Safety check: must exactly match the resolved board id when using --wipe-board or --wipe-board-all.",
+        help="Safety check: must exactly match the resolved board id when using --wipe-board, --wipe-board-all, or --clear-archive.",
     )
     p.add_argument("--log-file", default="logs/canvas_trello_sync.log", help="Write logs to this file.")
     p.add_argument("--log-http", action="store_true", help="Log HTTP request/response metadata (secrets redacted).")
     p.add_argument("--log-texts", action="store_true", help="Log description samples for debugging.")
     p.add_argument("--log-max-text", type=int, default=500, help="Max chars of text snippets when using --log-texts.")
+    p.add_argument(
+        "--dedupe",
+        action="store_true",
+        help="Archive duplicate synced cards on the Trello board, keeping manual edits safe.",
+    )
+    p.add_argument(
+        "--dedupe-dry-run",
+        action="store_true",
+        help="Report duplicate groups without making changes (use with --dedupe to preview).",
+    )
+    p.add_argument(
+        "--clear-archive",
+        action="store_true",
+        help="Permanently delete all archived cards on the Trello board before syncing.",
+    )
     p.add_argument(
         "--interval-minutes",
         type=int,
@@ -57,6 +72,14 @@ def main() -> None:
     args = _parse_args()
     if args.wipe_board and args.wipe_board_all:
         raise SystemExit("Choose only one: --wipe-board or --wipe-board-all")
+    if args.dedupe and args.wipe_board:
+        raise SystemExit("Choose only one: --dedupe or --wipe-board")
+    if args.dedupe and args.wipe_board_all:
+        raise SystemExit("Choose only one: --dedupe or --wipe-board-all")
+    if args.clear_archive and (args.dedupe or args.dedupe_dry_run):
+        raise SystemExit("Choose only one: --clear-archive or --dedupe/--dedupe-dry-run")
+    if args.clear_archive and not (args.once or args.wipe_board or args.wipe_board_all):
+        raise SystemExit("Use --clear-archive with --once or a wipe option to avoid repeated deletion.")
 
     root = logging.getLogger()
     root.setLevel(getattr(logging, str(args.log_level).upper(), logging.INFO))
@@ -95,6 +118,27 @@ def main() -> None:
         me = trello.validate_auth()
         trello.get_board_lists(board_id)
         logging.info("Trello OK: user=%s board_id=%s", me.get("username") or me.get("fullName") or "unknown", board_id)
+        return
+
+    if args.dedupe or args.dedupe_dry_run:
+        state = SyncState.load(cfg.state_file)
+        ensure_state_board(state=state, board_id=board_id)
+        summary = dedupe_board(
+            trello=trello,
+            board_id=board_id,
+            state=state,
+            dry_run=bool(args.dedupe_dry_run),
+        )
+        state.save(cfg.state_file)
+        logging.info(
+            "Dedupe complete: groups_scanned=%s groups_deduped=%s cards_archived=%s cards_skipped_manual=%s",
+            summary.groups_scanned,
+            summary.groups_deduped,
+            summary.cards_archived,
+            summary.cards_skipped_manual,
+        )
+        if args.dedupe_dry_run:
+            logging.info("Dedupe dry-run only; no cards were archived.")
         return
 
     canvas = CanvasClient(
@@ -155,6 +199,7 @@ def main() -> None:
                     f"({board_id})."
                 )
             state = SyncState.load(cfg.state_file)
+            ensure_state_board(state=state, board_id=board_id)
             managed_cards = [v for v in state.item_to_card.values() if isinstance(v, dict) and v.get("card_id")]
             for course_id, card_id in state.course_info_card.items():
                 lid = state.course_to_list.get(str(course_id), "")
@@ -216,6 +261,7 @@ def main() -> None:
             state.save(cfg.state_file)
 
         state = SyncState.load(cfg.state_file)
+        ensure_state_board(state=state, board_id=board_id)
         logging.info(
             "Loaded state: courses=%s items=%s managed_lists=%s",
             len(state.course_to_list),

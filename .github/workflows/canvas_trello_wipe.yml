@@ -104,6 +104,7 @@ jobs:
           CANVAS_TOKEN_LIFETIME_DAYS: ${{ secrets.CANVAS_TOKEN_LIFETIME_DAYS }}
 
           SYNC_STATE_FILE: data/canvas_trello_state.json
+          SYNC_ABORT_ON_BOARD_MISMATCH: "1"
           SYNC_BOOTSTRAP_STATE_FROM_BOARD: "1"
           DOTENV_OVERRIDE: "0"
         run: |

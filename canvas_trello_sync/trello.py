@@ -69,6 +69,11 @@ class TrelloClient:
         _raise_for_status_with_context(r, method="PUT", url=url)
         return r.json() if r.text else None
 
+    def _delete(self, path: str) -> None:
+        url = f"https://api.trello.com/1{path}"
+        r = self.session.delete(url, params=self._params(), timeout=30)
+        _raise_for_status_with_context(r, method="DELETE", url=url)
+
     def validate_auth(self) -> Dict[str, Any]:
         return self._get("/members/me", params={"fields": "id,username,fullName"})
 
@@ -179,6 +184,9 @@ class TrelloClient:
     def archive_card(self, card_id: str) -> None:
         self._put(f"/cards/{card_id}", {"closed": "true"})
 
+    def delete_card(self, card_id: str) -> None:
+        self._delete(f"/cards/{card_id}")
+
     def archive_list(self, list_id: str) -> None:
         self._put(f"/lists/{list_id}", {"closed": "true"})
 
@@ -190,6 +198,17 @@ class TrelloClient:
         lists = self._get(f"/boards/{board_id}/lists", params={"fields": "id", "filter": "open"}) or []
         for lst in lists:
             self.archive_list(str(lst["id"]))
+
+    def clear_board_archive(self, board_id: str) -> List[str]:
+        archived = self.get_board_cards(board_id, filter="closed", fields="id")
+        deleted: List[str] = []
+        for c in archived:
+            cid = str(c.get("id") or "")
+            if not cid:
+                continue
+            self.delete_card(cid)
+            deleted.append(cid)
+        return deleted
 
     def wipe_managed(
         self,

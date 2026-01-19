@@ -39,9 +39,9 @@ def checksum_payload(payload: Dict[str, Any]) -> str:
 def html_to_text(raw_html: Optional[str]) -> str:
     if not raw_html:
         return ""
-    text = re.sub(r"(?is)<(script|style).*?>.*?</\\1>", " ", raw_html)
-    text = re.sub(r"(?s)<br\\s*/?>", "\n", text)
-    text = re.sub(r"(?s)</p\\s*>", "\n", text)
+    text = re.sub(r"(?is)<(script|style).*?>.*?</\1>", " ", raw_html)
+    text = re.sub(r"(?s)<br\s*/?>", "\n", text)
+    text = re.sub(r"(?s)</p\s*>", "\n", text)
     text = re.sub(r"(?s)<.*?>", " ", text)
     text = html.unescape(text)
     text = unicodedata.normalize("NFKC", text)
@@ -51,12 +51,12 @@ def html_to_text(raw_html: Optional[str]) -> str:
     text = text.replace("\r\n", "\n")
     text = text.replace("\t", "t").replace("\f", "f").replace("\v", "d").replace("\r", "r")
     text = re.sub(r"[ \t\r\f\v]+", " ", text)
-    text = re.sub(r"\\n\\s*\\n+", "\n\n", text).strip()
+    text = re.sub(r"\n\s*\n+", "\n\n", text).strip()
     # Heuristic fixups for Canvas descriptions that contain broken URL schemes (often due to embedded tabs/newlines).
-    text = re.sub(r"\bh\\s*ps://", "https://", text, flags=re.IGNORECASE)
-    text = re.sub(r"\bh\\s*ps%3a", "https%3A", text, flags=re.IGNORECASE)
-    text = re.sub(r"\bh\\s*p://", "http://", text, flags=re.IGNORECASE)
-    text = re.sub(r"\bh\\s*p%3a", "http%3A", text, flags=re.IGNORECASE)
+    text = re.sub(r"\bh\s*ps://", "https://", text, flags=re.IGNORECASE)
+    text = re.sub(r"\bh\s*ps%3a", "https%3A", text, flags=re.IGNORECASE)
+    text = re.sub(r"\bh\s*p://", "http://", text, flags=re.IGNORECASE)
+    text = re.sub(r"\bh\s*p%3a", "http%3A", text, flags=re.IGNORECASE)
     return text
 
 @dataclass(frozen=True)

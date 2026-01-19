@@ -1,4 +1,4 @@
-# Canvas → Trello Sync
+# Canvas + Trello Sync
 
 Sync upcoming Canvas assignments + course calendar events into Trello.
 
@@ -6,7 +6,7 @@ Sync upcoming Canvas assignments + course calendar events into Trello.
 
 1. Create a virtualenv and install deps:
    - `python -m venv .venv`
-   - `.venv\\Scripts\\pip install -r requirements.txt`
+   - `.venv\Scripts\pip install -r requirements.txt`
 2. Create `.env` from `.env.example` and fill in values.
    - Trello key/token can be generated from Trello's app key page (key + token must match).
 
@@ -16,20 +16,23 @@ Sync upcoming Canvas assignments + course calendar events into Trello.
 - Poll every 30 minutes (default): `python -m canvas_trello_sync`
 - Validate Trello auth + board access: `python -m canvas_trello_sync --validate`
 - List active courses (helps find `CANVAS_TERM_ID`): `python -m canvas_trello_sync --list-courses`
+- Preview duplicate cleanup: `python -m canvas_trello_sync --dedupe-dry-run`
+- Deduplicate existing duplicates: `python -m canvas_trello_sync --dedupe`
 - Wipe managed content then sync (archives only cards created by this tool; archives tool-created lists only if empty after wipe): `python -m canvas_trello_sync --once --wipe-board --wipe-board-confirm <BOARD_ID>`
 - Full wipe then sync (DANGEROUS: archives ALL open cards and lists on the board, ignoring state): `python -m canvas_trello_sync --once --wipe-board-all --wipe-board-confirm <BOARD_ID>`
 - Debug logging: `python -m canvas_trello_sync --once --log-level DEBUG --log-http --log-texts`
 
 Avoid `--log-level DEBUG` when using Trello auth (key/token are query params and can appear in HTTP debug logs).
 
-By default, the sync scopes to the “current” term by selecting the largest `enrollment_term_id` returned by Canvas for active courses. Set `CANVAS_TERM_ID` to override.
+By default, the sync scopes to the "current" term by selecting the largest `enrollment_term_id` returned by Canvas for active courses. Set `CANVAS_TERM_ID` to override.
 
 Features:
-- Creates a per-class Trello list and a top “Class Info” card (teacher info when available via Canvas API).
+- Creates a per-class Trello list and a top "Class Info" card (teacher info when available via Canvas API).
 - Sorts the list by due date (earliest at top), keeping the info card pinned first.
-- Creates a “Canvas Token” list with a countdown card using `CANVAS_TOKEN_CREATED_AT` + `CANVAS_TOKEN_LIFETIME_DAYS`.
+- Creates a "Canvas Token" list with a countdown card using `CANVAS_TOKEN_CREATED_AT` + `CANVAS_TOKEN_LIFETIME_DAYS`.
 - Creates a per-class Trello label (e.g. `CS 101`) with a distinct color (persisted in state) and applies it to all synced cards.
 - Creates board-level `TODO` and `Done` lists at the bottom for manual organization.
+- Adds `SyncKey=...` markers to card descriptions for idempotent runs.
 
 ## GitHub Actions (Scheduled)
 
@@ -41,15 +44,15 @@ This repo includes a scheduled workflow at `.github/workflows/canvas_trello_sync
    - One of: `TRELLO_BOARD_ID` or `TRELLO_BOARD_URL`
 2. Optional secrets:
    - `DUE_WITHIN_DAYS`, `CANVAS_TOKEN_CREATED_AT`, `CANVAS_TOKEN_LIFETIME_DAYS`
-3. Enable Actions + wait for the scheduled run, or run it manually via “Run workflow”.
+3. Enable Actions + wait for the scheduled run, or run it manually via "Run workflow".
 
-The workflows persist `data/canvas_trello_state.json` by uploading/downloading a “state” artifact each run (shared across both the scheduled sync and the wipe workflow), and upload logs as a separate artifact.
+The workflows persist `data/canvas_trello_state.json` by uploading/downloading a state artifact each run (shared across both the scheduled sync and the wipe workflow), and upload logs as a separate artifact.
 
-To prevent accidental duplication, the scheduled workflow sets `SYNC_ABORT_ON_MISSING_STATE=1` and will fail if the state file can’t be restored but the board already contains synced cards.
+To prevent accidental duplication, the scheduled workflow sets `SYNC_ABORT_ON_MISSING_STATE=1` and will fail if the state file can't be restored but the board already contains synced cards. It also sets `SYNC_ABORT_ON_BOARD_MISMATCH=1` to prevent using a state file from a different board.
 
-Note: state restore pulls from the repo’s default branch to avoid “missing state” when manually running workflows from other branches.
+Note: state restore pulls from the repo's default branch to avoid "missing state" when manually running workflows from other branches.
 
-If a run can’t restore the state file but the board already contains existing synced cards, the workflow sets `SYNC_BOOTSTRAP_STATE_FROM_BOARD=1` to rebuild the state file from `SyncKey=` markers without creating duplicates.
+If a run can't restore the state file but the board already contains existing synced cards, the workflow sets `SYNC_BOOTSTRAP_STATE_FROM_BOARD=1` to rebuild the state file from `SyncKey=` markers without creating duplicates.
 
 To do a one-time cleanup (wipe managed content, then repopulate), run the manual workflow `.github/workflows/canvas_trello_wipe.yml` and provide the resolved `board_id` as the input. For a true fresh start (ignoring state), set the `full_wipe` input.
 
