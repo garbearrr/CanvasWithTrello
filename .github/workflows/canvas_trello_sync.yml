@@ -12,6 +12,7 @@ concurrency:
 
 permissions:
   contents: read
+  actions: write
 
 jobs:
   sync:
@@ -37,7 +38,12 @@ jobs:
             canvas-trello-state-
 
       - name: Install dependencies
-        run: python -m pip install --upgrade pip && python -m pip install -r requirements.txt
+        run: |
+          python --version
+          python -m pip --version
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -c "import requests, dateutil, dotenv; print('deps: ok')"
 
       - name: Run sync once
         env:
@@ -62,6 +68,7 @@ jobs:
           DOTENV_OVERRIDE: "0"
         run: |
           mkdir -p data logs
+          : > logs/canvas_trello_sync.log
           python -m canvas_trello_sync --once --log-level INFO --log-file logs/canvas_trello_sync.log
 
       - name: Save state cache
@@ -77,4 +84,5 @@ jobs:
         with:
           name: canvas-trello-sync-logs
           path: logs/canvas_trello_sync.log
+          if-no-files-found: warn
           retention-days: 7
