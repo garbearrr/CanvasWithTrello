@@ -169,6 +169,13 @@ class TrelloClient:
         )
         return cards
 
+    def get_board_cards(self, board_id: str, *, filter: str = "open", fields: str = "id,desc,closed") -> List[Dict[str, Any]]:
+        cards: List[Dict[str, Any]] = self._get(
+            f"/boards/{board_id}/cards",
+            params={"fields": fields, "filter": filter, "limit": 1000},
+        )
+        return cards
+
     def archive_card(self, card_id: str) -> None:
         self._put(f"/cards/{card_id}", {"closed": "true"})
 

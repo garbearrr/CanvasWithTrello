@@ -75,6 +75,7 @@ def main() -> None:
     trello = TrelloClient(cfg.trello_key, cfg.trello_token)
     board_id = cfg.trello_board_id or trello.get_board_id_from_url(cfg.trello_board_url)
     if args.log_http:
+        logging.getLogger("http").setLevel(logging.DEBUG)
         instrument_session(
             trello.session,
             name="trello",
@@ -129,6 +130,7 @@ def main() -> None:
     interval_seconds = max(60, int(interval_minutes * 60))
 
     def run_one() -> None:
+        logging.info("Starting sync run: board_id=%s state_file=%s", board_id, cfg.state_file)
         if args.wipe_board:
             if args.wipe_board_confirm != board_id:
                 raise SystemExit(
@@ -197,6 +199,12 @@ def main() -> None:
             state.save(cfg.state_file)
 
         state = SyncState.load(cfg.state_file)
+        logging.info(
+            "Loaded state: courses=%s items=%s managed_lists=%s",
+            len(state.course_to_list),
+            len(state.item_to_card),
+            len(state.managed_list_ids),
+        )
         state, summary = sync_once(
             canvas=canvas,
             trello=trello,

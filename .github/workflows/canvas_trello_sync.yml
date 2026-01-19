@@ -33,12 +33,26 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p data
-          prev_run_id="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/canvas_trello_sync.yml/runs?branch=${GITHUB_REF_NAME}&status=success&per_page=1" --jq '.workflow_runs[0].id // empty')"
+          # Fetch the most recent *completed + successful* run (excluding the current run),
+          # then download its state artifact.
+          prev_run_id="$(
+            gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/canvas_trello_sync.yml/runs?branch=${GITHUB_REF_NAME}&status=completed&per_page=20" \
+              --jq '.workflow_runs
+                | map(select(.conclusion == "success"))
+                | map(select((.id|tostring) != env.GITHUB_RUN_ID))
+                | .[0].id // empty'
+          )"
           if [ -n "${prev_run_id}" ]; then
             echo "Downloading previous state from run: ${prev_run_id}"
             gh run download "${prev_run_id}" -n canvas-trello-sync-state -D . || true
           else
             echo "No previous successful run found; starting with empty state."
+          fi
+          if [ -f data/canvas_trello_state.json ]; then
+            echo "State file present: data/canvas_trello_state.json"
+            python -c "import json; p='data/canvas_trello_state.json'; s=json.load(open(p,'r',encoding='utf-8')); print('state keys:', list(s.keys())); print('items:', len(s.get('item_to_card',{}) or {}), 'courses:', len(s.get('course_to_list',{}) or {}))"
+          else
+            echo "State file not present after download."
           fi
 
       - name: Install dependencies
@@ -73,7 +87,8 @@ jobs:
         run: |
           mkdir -p data logs
           : > logs/canvas_trello_sync.log
-          python -m canvas_trello_sync --once --log-level INFO --log-file logs/canvas_trello_sync.log
+          python -m canvas_trello_sync --once --log-level INFO --log-file logs/canvas_trello_sync.log --log-http
+          python -c "import json; p='data/canvas_trello_state.json'; s=json.load(open(p,'r',encoding='utf-8')); print('post-sync items:', len(s.get('item_to_card',{}) or {}))"
 
       - name: Upload state
         if: always()
