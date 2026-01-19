@@ -42,6 +42,6 @@ This repo includes a scheduled workflow at `.github/workflows/canvas_trello_sync
    - `DUE_WITHIN_DAYS`, `CANVAS_TOKEN_CREATED_AT`, `CANVAS_TOKEN_LIFETIME_DAYS`
 3. Enable Actions + wait for the scheduled run, or run it manually via “Run workflow”.
 
-The workflow persists `data/canvas_trello_state.json` using the Actions cache and uploads logs as an artifact.
+The workflow persists `data/canvas_trello_state.json` by uploading/downloading a “state” artifact each run, and uploads logs as a separate artifact.
 
 State is stored in `data/canvas_trello_state.json` by default (configurable via `SYNC_STATE_FILE`).

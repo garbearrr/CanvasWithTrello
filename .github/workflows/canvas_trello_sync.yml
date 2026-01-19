@@ -28,14 +28,18 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Restore state cache
-        uses: actions/cache/restore@v4
-        with:
-          path: |
-            data/canvas_trello_state.json
-          key: canvas-trello-state-${{ github.run_id }}
-          restore-keys: |
-            canvas-trello-state-
+      - name: Download previous state artifact (best effort)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p data
+          prev_run_id="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/canvas_trello_sync.yml/runs?branch=${GITHUB_REF_NAME}&status=success&per_page=1" --jq '.workflow_runs[0].id // empty')"
+          if [ -n "${prev_run_id}" ]; then
+            echo "Downloading previous state from run: ${prev_run_id}"
+            gh run download "${prev_run_id}" -n canvas-trello-sync-state -D . || true
+          else
+            echo "No previous successful run found; starting with empty state."
+          fi
 
       - name: Install dependencies
         run: |
@@ -71,12 +75,14 @@ jobs:
           : > logs/canvas_trello_sync.log
           python -m canvas_trello_sync --once --log-level INFO --log-file logs/canvas_trello_sync.log
 
-      - name: Save state cache
-        uses: actions/cache/save@v4
+      - name: Upload state
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
-          path: |
-            data/canvas_trello_state.json
-          key: canvas-trello-state-${{ github.run_id }}
+          name: canvas-trello-sync-state
+          path: data/canvas_trello_state.json
+          if-no-files-found: warn
+          retention-days: 30
 
       - name: Upload logs
         if: always()
