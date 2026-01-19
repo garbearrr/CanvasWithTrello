@@ -44,4 +44,6 @@ This repo includes a scheduled workflow at `.github/workflows/canvas_trello_sync
 
 The workflow persists `data/canvas_trello_state.json` by uploading/downloading a “state” artifact each run, and uploads logs as a separate artifact.
 
+To do a one-time cleanup (wipe managed content, then repopulate), run the manual workflow `.github/workflows/canvas_trello_wipe.yml` and provide the resolved `board_id` as the input. You can get the board id from the scheduled workflow’s “Validate board id” step output.
+
 State is stored in `data/canvas_trello_state.json` by default (configurable via `SYNC_STATE_FILE`).

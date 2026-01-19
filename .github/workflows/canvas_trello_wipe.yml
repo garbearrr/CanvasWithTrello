@@ -1,0 +1,108 @@
+name: Canvas → Trello Wipe (Managed)
+
+"on":
+  workflow_dispatch:
+    inputs:
+      board_id:
+        description: "Resolved Trello board id (not URL). Required as a safety confirmation."
+        required: true
+        type: string
+
+concurrency:
+  group: canvas-trello-sync
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  wipe_and_sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Download previous state artifact (best effort)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p data
+          prev_run_id="$(
+            gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/canvas_trello_sync.yml/runs?branch=${GITHUB_REF_NAME}&status=completed&per_page=20" \
+              --jq '.workflow_runs
+                | map(select(.conclusion == "success"))
+                | map(select((.id|tostring) != env.GITHUB_RUN_ID))
+                | .[0].id // empty'
+          )"
+          if [ -n "${prev_run_id}" ]; then
+            echo "Downloading previous state from run: ${prev_run_id}"
+            gh run download "${prev_run_id}" -n canvas-trello-sync-state -D . || true
+          else
+            echo "No previous successful run found; wipe will be limited without prior state."
+          fi
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Validate board id (prints resolved id)
+        env:
+          CANVAS_BASE_URL: ${{ secrets.CANVAS_BASE_URL }}
+          CANVAS_TOKEN: ${{ secrets.CANVAS_TOKEN }}
+          TRELLO_KEY: ${{ secrets.TRELLO_KEY }}
+          TRELLO_TOKEN: ${{ secrets.TRELLO_TOKEN }}
+          TRELLO_BOARD_ID: ${{ secrets.TRELLO_BOARD_ID }}
+          TRELLO_BOARD_URL: ${{ secrets.TRELLO_BOARD_URL }}
+          SYNC_STATE_FILE: data/canvas_trello_state.json
+          DOTENV_OVERRIDE: "0"
+        run: python -m canvas_trello_sync --validate --log-level INFO
+
+      - name: Wipe managed content then sync
+        env:
+          CANVAS_BASE_URL: ${{ secrets.CANVAS_BASE_URL }}
+          CANVAS_TOKEN: ${{ secrets.CANVAS_TOKEN }}
+
+          TRELLO_KEY: ${{ secrets.TRELLO_KEY }}
+          TRELLO_TOKEN: ${{ secrets.TRELLO_TOKEN }}
+
+          TRELLO_BOARD_ID: ${{ secrets.TRELLO_BOARD_ID }}
+          TRELLO_BOARD_URL: ${{ secrets.TRELLO_BOARD_URL }}
+
+          DUE_WITHIN_DAYS: ${{ secrets.DUE_WITHIN_DAYS }}
+          CANVAS_TOKEN_CREATED_AT: ${{ secrets.CANVAS_TOKEN_CREATED_AT }}
+          CANVAS_TOKEN_LIFETIME_DAYS: ${{ secrets.CANVAS_TOKEN_LIFETIME_DAYS }}
+
+          SYNC_STATE_FILE: data/canvas_trello_state.json
+          DOTENV_OVERRIDE: "0"
+        run: |
+          mkdir -p data logs
+          : > logs/canvas_trello_sync.log
+          python -m canvas_trello_sync --once --wipe-board --wipe-board-confirm "${{ inputs.board_id }}" --log-level INFO --log-file logs/canvas_trello_sync.log --log-http
+
+      - name: Upload state
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: canvas-trello-sync-state
+          path: data/canvas_trello_state.json
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: canvas-trello-sync-logs
+          path: logs/canvas_trello_sync.log
+          if-no-files-found: warn
+          retention-days: 7
+
