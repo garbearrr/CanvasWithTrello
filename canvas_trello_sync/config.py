@@ -37,11 +37,23 @@ class Config:
 
     @classmethod
     def from_env(cls) -> Config:
+        def int_env(name: str, default: int) -> int:
+            raw = os.getenv(name)
+            if raw is None:
+                return default
+            raw = raw.strip()
+            if raw == "":
+                return default
+            try:
+                return int(raw)
+            except ValueError as e:
+                raise SystemExit(f"Invalid integer for {name}: {raw!r}") from e
+
         canvas_base_url = os.getenv("CANVAS_BASE_URL", "").strip().rstrip("/")
         canvas_token = os.getenv("CANVAS_TOKEN", "").strip()
         canvas_term_id = os.getenv("CANVAS_TERM_ID", "").strip()
         canvas_token_created_at = os.getenv("CANVAS_TOKEN_CREATED_AT", "").strip()
-        canvas_token_lifetime_days = int(os.getenv("CANVAS_TOKEN_LIFETIME_DAYS", "120"))
+        canvas_token_lifetime_days = int_env("CANVAS_TOKEN_LIFETIME_DAYS", 120)
 
         trello_key = os.getenv("TRELLO_KEY", "").strip()
         trello_token = os.getenv("TRELLO_TOKEN", "").strip()
@@ -49,8 +61,8 @@ class Config:
         trello_board_id = os.getenv("TRELLO_BOARD_ID", "").strip()
         trello_board_url = os.getenv("TRELLO_BOARD_URL", "").strip()
 
-        due_within_days = int(os.getenv("DUE_WITHIN_DAYS", "30"))
-        poll_interval_minutes = int(os.getenv("POLL_INTERVAL_MINUTES", "30"))
+        due_within_days = int_env("DUE_WITHIN_DAYS", 30)
+        poll_interval_minutes = int_env("POLL_INTERVAL_MINUTES", 30)
         state_file = os.getenv("SYNC_STATE_FILE", "data/canvas_trello_state.json")
 
         cls.require(canvas_base_url, "CANVAS_BASE_URL")

@@ -61,7 +61,7 @@ jobs:
           DUE_WITHIN_DAYS: ${{ secrets.DUE_WITHIN_DAYS }}
           CANVAS_TOKEN_CREATED_AT: ${{ secrets.CANVAS_TOKEN_CREATED_AT }}
           CANVAS_TOKEN_LIFETIME_DAYS: ${{ secrets.CANVAS_TOKEN_LIFETIME_DAYS }}
-          POLL_INTERVAL_MINUTES: "30"
+          POLL_INTERVAL_MINUTES: "60"
           SYNC_STATE_FILE: data/canvas_trello_state.json
 
           # Ensure `.env` (if present) doesn't override secrets.
