@@ -17,6 +17,7 @@ Sync upcoming Canvas assignments + course calendar events into Trello.
 - Validate Trello auth + board access: `python -m canvas_trello_sync --validate`
 - List active courses (helps find `CANVAS_TERM_ID`): `python -m canvas_trello_sync --list-courses`
 - Wipe managed content then sync (archives only cards created by this tool; archives tool-created lists only if empty after wipe): `python -m canvas_trello_sync --once --wipe-board --wipe-board-confirm <BOARD_ID>`
+- Full wipe then sync (DANGEROUS: archives ALL open cards and lists on the board, ignoring state): `python -m canvas_trello_sync --once --wipe-board-all --wipe-board-confirm <BOARD_ID>`
 - Debug logging: `python -m canvas_trello_sync --once --log-level DEBUG --log-http --log-texts`
 
 Avoid `--log-level DEBUG` when using Trello auth (key/token are query params and can appear in HTTP debug logs).
@@ -46,6 +47,8 @@ The workflows persist `data/canvas_trello_state.json` by uploading/downloading a
 
 To prevent accidental duplication, the scheduled workflow sets `SYNC_ABORT_ON_MISSING_STATE=1` and will fail if the state file can’t be restored but the board already contains synced cards.
 
-To do a one-time cleanup (wipe managed content, then repopulate), run the manual workflow `.github/workflows/canvas_trello_wipe.yml` and provide the resolved `board_id` as the input. You can get the board id from the scheduled workflow’s “Validate board id” step output.
+Note: state restore pulls from the repo’s default branch to avoid “missing state” when manually running workflows from other branches.
+
+To do a one-time cleanup (wipe managed content, then repopulate), run the manual workflow `.github/workflows/canvas_trello_wipe.yml` and provide the resolved `board_id` as the input. For a true fresh start (ignoring state), set the `full_wipe` input.
 
 State is stored in `data/canvas_trello_state.json` by default (configurable via `SYNC_STATE_FILE`).

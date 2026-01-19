@@ -414,11 +414,33 @@ def sync_once(
         and not state.meta
     )
     if abort_on_missing_state and state_looks_empty and (synckey_to_card or url_to_card):
-        raise SystemExit(
+        examples: list[str] = []
+        for k, c in list(synckey_to_card.items())[:5]:
+            cid = str(c.get("id") or "")
+            lid = str(c.get("idList") or "")
+            examples.append(f"{k} -> card={cid} list={lid}")
+        if not examples:
+            for u, c in list(url_to_card.items())[:5]:
+                cid = str(c.get("id") or "")
+                lid = str(c.get("idList") or "")
+                # Don't log the full Canvas URL; just log the card/list ids.
+                uhash = hashlib.sha256(u.encode('utf-8')).hexdigest()[:10]
+                examples.append(f"canvas_url_hash={uhash} -> card={cid} list={lid}")
+
+        msg = (
             "State appears missing/empty but the Trello board already has existing synced cards. "
-            "This usually means the state file was not restored on this runner. "
+            "This usually means the state file was not restored on this runner (common causes: first-ever run, "
+            "or workflow_dispatch run from a different branch than the one that produced the last state artifact). "
             "Fix the workflow's state restore step (or re-run once to republish state), then try again."
         )
+        logger.error(
+            "%s recovered_synckeys=%s recovered_urls=%s examples=%s",
+            msg,
+            len(synckey_to_card),
+            len(url_to_card),
+            "; ".join(examples) if examples else "(none)",
+        )
+        raise SystemExit(msg)
     logger.info(
         "Sync start: board_id=%s due_within_days=%s state_items=%s recovered_synckeys=%s recovered_urls=%s",
         board_id,

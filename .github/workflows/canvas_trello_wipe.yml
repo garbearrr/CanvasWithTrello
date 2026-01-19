@@ -7,6 +7,11 @@ name: Canvas → Trello Wipe (Managed)
         description: "Resolved Trello board id (not URL). Required as a safety confirmation."
         required: true
         type: string
+      full_wipe:
+        description: "DANGEROUS: archive ALL open cards + lists before syncing (ignores state)."
+        required: false
+        type: boolean
+        default: false
 
 concurrency:
   group: canvas-trello-sync
@@ -33,6 +38,7 @@ jobs:
       - name: Download previous state artifact (best effort)
         env:
           GH_TOKEN: ${{ github.token }}
+          STATE_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           set -euo pipefail
           mkdir -p data
@@ -41,7 +47,7 @@ jobs:
 
           # Restore the most recent run (any workflow) on this branch that uploaded the state artifact.
           run_ids="$(
-            gh api "repos/${GITHUB_REPOSITORY}/actions/runs?branch=${GITHUB_REF_NAME}&status=completed&per_page=50" \
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs?branch=${STATE_BRANCH}&status=completed&per_page=50" \
               --jq '.workflow_runs
                 | map(select((.id|tostring) != env.GITHUB_RUN_ID))
                 | .[].id'
@@ -102,7 +108,11 @@ jobs:
         run: |
           mkdir -p data logs
           : > logs/canvas_trello_sync.log
-          python -m canvas_trello_sync --once --wipe-board --wipe-board-confirm "${{ inputs.board_id }}" --log-level INFO --log-file logs/canvas_trello_sync.log --log-http
+          wipe_flag="--wipe-board"
+          if [ "${{ inputs.full_wipe }}" = "true" ]; then
+            wipe_flag="--wipe-board-all"
+          fi
+          python -m canvas_trello_sync --once ${wipe_flag} --wipe-board-confirm "${{ inputs.board_id }}" --log-level INFO --log-file logs/canvas_trello_sync.log --log-http
 
       - name: Upload state
         if: always()

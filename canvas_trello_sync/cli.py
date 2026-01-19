@@ -30,9 +30,14 @@ def _parse_args() -> argparse.Namespace:
         help="Archive only content created by this tool before syncing.",
     )
     p.add_argument(
+        "--wipe-board-all",
+        action="store_true",
+        help="DANGEROUS: Archive ALL open cards and lists on the board before syncing (ignores state).",
+    )
+    p.add_argument(
         "--wipe-board-confirm",
         default="",
-        help="Safety check: must exactly match the resolved board id when using --wipe-board.",
+        help="Safety check: must exactly match the resolved board id when using --wipe-board or --wipe-board-all.",
     )
     p.add_argument("--log-file", default="logs/canvas_trello_sync.log", help="Write logs to this file.")
     p.add_argument("--log-http", action="store_true", help="Log HTTP request/response metadata (secrets redacted).")
@@ -50,6 +55,8 @@ def _parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = _parse_args()
+    if args.wipe_board and args.wipe_board_all:
+        raise SystemExit("Choose only one: --wipe-board or --wipe-board-all")
 
     root = logging.getLogger()
     root.setLevel(getattr(logging, str(args.log_level).upper(), logging.INFO))
@@ -131,6 +138,16 @@ def main() -> None:
 
     def run_one() -> None:
         logging.info("Starting sync run: board_id=%s state_file=%s", board_id, cfg.state_file)
+        if args.wipe_board_all:
+            if args.wipe_board_confirm != board_id:
+                raise SystemExit(
+                    "Refusing to wipe board: pass `--wipe-board-confirm` equal to the resolved board id "
+                    f"({board_id})."
+                )
+            logging.warning("Full wipe requested on board %s (ALL open cards + lists)", board_id)
+            trello.wipe_board(board_id)
+            # Reset local state to avoid carrying stale card IDs into a fresh board.
+            SyncState.empty().save(cfg.state_file)
         if args.wipe_board:
             if args.wipe_board_confirm != board_id:
                 raise SystemExit(
@@ -205,17 +222,23 @@ def main() -> None:
             len(state.item_to_card),
             len(state.managed_list_ids),
         )
-        state, summary = sync_once(
-            canvas=canvas,
-            trello=trello,
-            board_id=board_id,
-            due_within_days=cfg.due_within_days,
-            canvas_term_id=cfg.canvas_term_id,
-            canvas_token_created_at=cfg.canvas_token_created_at,
-            canvas_token_lifetime_days=cfg.canvas_token_lifetime_days,
-            state=state,
-            log_texts=bool(args.log_texts),
-        )
+        try:
+            state, summary = sync_once(
+                canvas=canvas,
+                trello=trello,
+                board_id=board_id,
+                due_within_days=cfg.due_within_days,
+                canvas_term_id=cfg.canvas_term_id,
+                canvas_token_created_at=cfg.canvas_token_created_at,
+                canvas_token_lifetime_days=cfg.canvas_token_lifetime_days,
+                state=state,
+                log_texts=bool(args.log_texts),
+            )
+        except SystemExit as e:
+            msg = str(e).strip()
+            if msg:
+                logging.error("%s", msg)
+            raise
         state.save(cfg.state_file)
         logging.info(
             "Sync complete: lists_created=%s cards_created=%s cards_updated=%s state=%s",
