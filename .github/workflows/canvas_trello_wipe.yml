@@ -34,19 +34,35 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          set -euo pipefail
           mkdir -p data
-          prev_run_id="$(
-            gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/canvas_trello_sync.yml/runs?branch=${GITHUB_REF_NAME}&status=completed&per_page=20" \
+          state_path="data/canvas_trello_state.json"
+          rm -f "${state_path}"
+
+          # Restore the most recent run (any workflow) on this branch that uploaded the state artifact.
+          run_ids="$(
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs?branch=${GITHUB_REF_NAME}&status=completed&per_page=50" \
               --jq '.workflow_runs
-                | map(select(.conclusion == "success"))
                 | map(select((.id|tostring) != env.GITHUB_RUN_ID))
-                | .[0].id // empty'
+                | .[].id'
           )"
-          if [ -n "${prev_run_id}" ]; then
-            echo "Downloading previous state from run: ${prev_run_id}"
-            gh run download "${prev_run_id}" -n canvas-trello-sync-state -D . || true
+
+          restored_from=""
+          for run_id in ${run_ids}; do
+            echo "Trying to restore state from run: ${run_id}"
+            rm -f "${state_path}"
+            if gh run download "${run_id}" --repo "${GITHUB_REPOSITORY}" -n canvas-trello-sync-state -D .; then
+              if [ -f "${state_path}" ]; then
+                restored_from="${run_id}"
+                break
+              fi
+            fi
+          done
+
+          if [ -f "${state_path}" ]; then
+            echo "State restored from run: ${restored_from}"
           else
-            echo "No previous successful run found; wipe will be limited without prior state."
+            echo "No previous state artifact found; wipe will be limited without prior state."
           fi
 
       - name: Install dependencies
@@ -105,4 +121,3 @@ jobs:
           path: logs/canvas_trello_sync.log
           if-no-files-found: warn
           retention-days: 7
-

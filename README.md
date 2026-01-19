@@ -32,7 +32,7 @@ Features:
 
 ## GitHub Actions (Scheduled)
 
-This repo includes a scheduled workflow at `.github/workflows/canvas_trello_sync.yml` that runs every ~30 minutes.
+This repo includes a scheduled workflow at `.github/workflows/canvas_trello_sync.yml` that runs hourly.
 
 1. Add repo secrets:
    - `CANVAS_BASE_URL`, `CANVAS_TOKEN`
@@ -42,7 +42,9 @@ This repo includes a scheduled workflow at `.github/workflows/canvas_trello_sync
    - `DUE_WITHIN_DAYS`, `CANVAS_TOKEN_CREATED_AT`, `CANVAS_TOKEN_LIFETIME_DAYS`
 3. Enable Actions + wait for the scheduled run, or run it manually via “Run workflow”.
 
-The workflow persists `data/canvas_trello_state.json` by uploading/downloading a “state” artifact each run, and uploads logs as a separate artifact.
+The workflows persist `data/canvas_trello_state.json` by uploading/downloading a “state” artifact each run (shared across both the scheduled sync and the wipe workflow), and upload logs as a separate artifact.
+
+To prevent accidental duplication, the scheduled workflow sets `SYNC_ABORT_ON_MISSING_STATE=1` and will fail if the state file can’t be restored but the board already contains synced cards.
 
 To do a one-time cleanup (wipe managed content, then repopulate), run the manual workflow `.github/workflows/canvas_trello_wipe.yml` and provide the resolved `board_id` as the input. You can get the board id from the scheduled workflow’s “Validate board id” step output.
 

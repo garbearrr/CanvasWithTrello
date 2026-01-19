@@ -32,27 +32,37 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          set -euo pipefail
           mkdir -p data
-          # Fetch the most recent *completed + successful* run (excluding the current run),
-          # then download its state artifact.
-          prev_run_id="$(
-            gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/canvas_trello_sync.yml/runs?branch=${GITHUB_REF_NAME}&status=completed&per_page=20" \
+          state_path="data/canvas_trello_state.json"
+          rm -f "${state_path}"
+
+          # Restore the most recent run (any workflow) on this branch that uploaded the state artifact.
+          # This avoids "state chain" breaks when the previous run failed or when the wipe workflow ran last.
+          run_ids="$(
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs?branch=${GITHUB_REF_NAME}&status=completed&per_page=50" \
               --jq '.workflow_runs
-                | map(select(.conclusion == "success"))
                 | map(select((.id|tostring) != env.GITHUB_RUN_ID))
-                | .[0].id // empty'
+                | .[].id'
           )"
-          if [ -n "${prev_run_id}" ]; then
-            echo "Downloading previous state from run: ${prev_run_id}"
-            gh run download "${prev_run_id}" -n canvas-trello-sync-state -D . || true
-          else
-            echo "No previous successful run found; starting with empty state."
-          fi
-          if [ -f data/canvas_trello_state.json ]; then
-            echo "State file present: data/canvas_trello_state.json"
+
+          restored_from=""
+          for run_id in ${run_ids}; do
+            echo "Trying to restore state from run: ${run_id}"
+            rm -f "${state_path}"
+            if gh run download "${run_id}" --repo "${GITHUB_REPOSITORY}" -n canvas-trello-sync-state -D .; then
+              if [ -f "${state_path}" ]; then
+                restored_from="${run_id}"
+                break
+              fi
+            fi
+          done
+
+          if [ -f "${state_path}" ]; then
+            echo "State restored from run: ${restored_from}"
             python -c "import json; p='data/canvas_trello_state.json'; s=json.load(open(p,'r',encoding='utf-8')); print('state keys:', list(s.keys())); print('items:', len(s.get('item_to_card',{}) or {}), 'courses:', len(s.get('course_to_list',{}) or {}))"
           else
-            echo "State file not present after download."
+            echo "No previous state artifact found; starting with empty state."
           fi
 
       - name: Install dependencies
@@ -81,6 +91,7 @@ jobs:
           CANVAS_TOKEN_LIFETIME_DAYS: ${{ secrets.CANVAS_TOKEN_LIFETIME_DAYS }}
           POLL_INTERVAL_MINUTES: "60"
           SYNC_STATE_FILE: data/canvas_trello_state.json
+          SYNC_ABORT_ON_MISSING_STATE: "1"
 
           # Ensure `.env` (if present) doesn't override secrets.
           DOTENV_OVERRIDE: "0"

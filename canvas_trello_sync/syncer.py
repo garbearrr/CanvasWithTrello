@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 import hashlib
@@ -397,6 +398,27 @@ def sync_once(
     except Exception:
         synckey_to_card = {}
         url_to_card = {}
+
+    abort_on_missing_state = os.getenv("SYNC_ABORT_ON_MISSING_STATE", "0").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "y",
+        "on",
+    }
+    state_looks_empty = (
+        not state.course_to_list
+        and not state.item_to_card
+        and not state.managed_list_ids
+        and not state.course_info_card
+        and not state.meta
+    )
+    if abort_on_missing_state and state_looks_empty and (synckey_to_card or url_to_card):
+        raise SystemExit(
+            "State appears missing/empty but the Trello board already has existing synced cards. "
+            "This usually means the state file was not restored on this runner. "
+            "Fix the workflow's state restore step (or re-run once to republish state), then try again."
+        )
     logger.info(
         "Sync start: board_id=%s due_within_days=%s state_items=%s recovered_synckeys=%s recovered_urls=%s",
         board_id,
