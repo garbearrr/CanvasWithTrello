@@ -1,0 +1,80 @@
+name: Canvas → Trello Sync
+
+"on":
+  workflow_dispatch:
+  schedule:
+    # GitHub schedules are best-effort and may drift.
+    - cron: "0 * * * *"
+
+concurrency:
+  group: canvas-trello-sync
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Restore state cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            data/canvas_trello_state.json
+          key: canvas-trello-state-${{ github.run_id }}
+          restore-keys: |
+            canvas-trello-state-
+
+      - name: Install dependencies
+        run: python -m pip install --upgrade pip && python -m pip install -r requirements.txt
+
+      - name: Run sync once
+        env:
+          CANVAS_BASE_URL: ${{ secrets.CANVAS_BASE_URL }}
+          CANVAS_TOKEN: ${{ secrets.CANVAS_TOKEN }}
+
+          TRELLO_KEY: ${{ secrets.TRELLO_KEY }}
+          TRELLO_TOKEN: ${{ secrets.TRELLO_TOKEN }}
+
+          # Set ONE of these in secrets
+          TRELLO_BOARD_ID: ${{ secrets.TRELLO_BOARD_ID }}
+          TRELLO_BOARD_URL: ${{ secrets.TRELLO_BOARD_URL }}
+
+          # Optional secrets/vars
+          DUE_WITHIN_DAYS: ${{ secrets.DUE_WITHIN_DAYS }}
+          CANVAS_TOKEN_CREATED_AT: ${{ secrets.CANVAS_TOKEN_CREATED_AT }}
+          CANVAS_TOKEN_LIFETIME_DAYS: ${{ secrets.CANVAS_TOKEN_LIFETIME_DAYS }}
+          POLL_INTERVAL_MINUTES: "30"
+          SYNC_STATE_FILE: data/canvas_trello_state.json
+
+          # Ensure `.env` (if present) doesn't override secrets.
+          DOTENV_OVERRIDE: "0"
+        run: |
+          mkdir -p data logs
+          python -m canvas_trello_sync --once --log-level INFO --log-file logs/canvas_trello_sync.log
+
+      - name: Save state cache
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            data/canvas_trello_state.json
+          key: canvas-trello-state-${{ github.run_id }}
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: canvas-trello-sync-logs
+          path: logs/canvas_trello_sync.log
+          retention-days: 7

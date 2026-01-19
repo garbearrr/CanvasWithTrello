@@ -1,0 +1,2 @@
+2026-01-18 21:36:59,238 WARNING Wiping managed Trello content on board 696d596cf89a79e4a081c438: cards=51 lists=0
+2026-01-18 21:38:13,675 INFO Sync complete: lists_created=0 cards_created=43 cards_updated=0 state=data/canvas_trello_state.json
