@@ -49,6 +49,8 @@ To prevent accidental duplication, the scheduled workflow sets `SYNC_ABORT_ON_MI
 
 Note: state restore pulls from the repo’s default branch to avoid “missing state” when manually running workflows from other branches.
 
+If a run can’t restore the state file but the board already contains existing synced cards, the workflow sets `SYNC_BOOTSTRAP_STATE_FROM_BOARD=1` to rebuild the state file from `SyncKey=` markers without creating duplicates.
+
 To do a one-time cleanup (wipe managed content, then repopulate), run the manual workflow `.github/workflows/canvas_trello_wipe.yml` and provide the resolved `board_id` as the input. For a true fresh start (ignoring state), set the `full_wipe` input.
 
 State is stored in `data/canvas_trello_state.json` by default (configurable via `SYNC_STATE_FILE`).

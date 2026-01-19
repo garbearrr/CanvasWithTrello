@@ -93,6 +93,7 @@ jobs:
           POLL_INTERVAL_MINUTES: "60"
           SYNC_STATE_FILE: data/canvas_trello_state.json
           SYNC_ABORT_ON_MISSING_STATE: "1"
+          SYNC_BOOTSTRAP_STATE_FROM_BOARD: "1"
 
           # Ensure `.env` (if present) doesn't override secrets.
           DOTENV_OVERRIDE: "0"
